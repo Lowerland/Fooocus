@@ -283,6 +283,43 @@ def worker():
                      total_count, show_intermediate_results, persist_image=True):
         if async_task.last_stop is not False:
             ldm_patched.modules.model_management.interrupt_current_processing()
+        expected_cross_attn_dim = None
+        try:
+            if pipeline.final_unet is not None:
+                expected_cross_attn_dim = pipeline.final_unet.model.model_config.unet_config.get('context_dim')
+        except AttributeError:
+            expected_cross_attn_dim = None
+
+        def adjust_conditioning_width(conditioning, expected_dim, label):
+            if conditioning is None or expected_dim is None:
+                return conditioning
+            try:
+                import torch
+                import torch.nn.functional as F
+            except ImportError:
+                return conditioning
+
+            adjusted = False
+            for entry in conditioning:
+                tensor = entry[0] if isinstance(entry, (list, tuple)) and len(entry) > 0 else None
+                if not isinstance(tensor, torch.Tensor):
+                    continue
+                current_dim = tensor.shape[-1]
+                if current_dim == expected_dim:
+                    continue
+                adjusted = True
+                if current_dim < expected_dim:
+                    pad = expected_dim - current_dim
+                    entry[0] = F.pad(tensor, (0, pad))
+                else:
+                    entry[0] = tensor[..., :expected_dim]
+            if adjusted:
+                print(f'[ControlNet] Adjusted {label} conditioning width to match UNet context size ({expected_dim}).')
+            return conditioning
+
+        positive_cond = adjust_conditioning_width(positive_cond, expected_cross_attn_dim, 'positive')
+        negative_cond = adjust_conditioning_width(negative_cond, expected_cross_attn_dim, 'negative')
+
         if 'cn' in goals:
             for cn_flag, cn_path in [
                 (flags.cn_canny, controlnet_canny_path),
