@@ -77,8 +77,12 @@ build_launcher()
 args = ini_args()
 
 if args.gpu_device_id is not None:
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_device_id)
-    print("Set device to:", args.gpu_device_id)
+    gpu_devices = str(args.gpu_device_id).replace(" ", "")
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu_devices
+    if "," in gpu_devices:
+        print("Set devices to:", gpu_devices)
+    else:
+        print("Set device to:", gpu_devices)
 
 if args.hf_mirror is not None:
     os.environ['HF_MIRROR'] = str(args.hf_mirror)
