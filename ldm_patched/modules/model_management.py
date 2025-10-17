@@ -3,6 +3,7 @@ from enum import Enum
 from ldm_patched.modules.args_parser import args
 import ldm_patched.modules.utils
 import torch
+import torch.nn as nn
 import sys
 
 class VRAMState(Enum):
@@ -64,6 +65,18 @@ if args.always_cpu:
         torch.set_num_threads(args.always_cpu)
     print(f"Running on {torch.get_num_threads()} CPU threads")
     cpu_state = CPUState.CPU
+
+MULTI_GPU_DEVICE_IDS = []
+MULTI_GPU_ENABLED = False
+if torch.cuda.is_available() and cpu_state == CPUState.GPU and not directml_enabled:
+    try:
+        MULTI_GPU_DEVICE_IDS = list(range(torch.cuda.device_count()))
+    except Exception:
+        MULTI_GPU_DEVICE_IDS = []
+    if len(MULTI_GPU_DEVICE_IDS) > 1:
+        MULTI_GPU_ENABLED = True
+        device_labels = ", ".join(f"cuda:{idx}" for idx in MULTI_GPU_DEVICE_IDS)
+        print(f"Multi-GPU execution enabled on devices: {device_labels}")
 
 def is_intel_xpu():
     global cpu_state
@@ -302,6 +315,9 @@ class LoadedModel:
             self.model.unpatch_model(self.model.offload_device)
             self.model_unload()
             raise e
+
+        if lowvram_model_memory == 0:
+            self.real_model = prepare_model_for_multi_gpu(self.real_model)
 
         if lowvram_model_memory > 0:
             print("loading in lowvram mode", lowvram_model_memory/(1024 * 1024))
@@ -648,6 +664,33 @@ def pytorch_attention_flash_attention():
         if is_nvidia(): #pytorch flash attention only works on Nvidia
             return True
     return False
+
+
+def multi_gpu_available():
+    global MULTI_GPU_ENABLED
+    return MULTI_GPU_ENABLED
+
+
+def multi_gpu_device_ids():
+    return MULTI_GPU_DEVICE_IDS[:]
+
+
+def prepare_model_for_multi_gpu(model):
+    if not multi_gpu_available():
+        return model
+
+    diffusion_model = getattr(model, "diffusion_model", None)
+    if diffusion_model is None:
+        return model
+
+    if isinstance(diffusion_model, nn.DataParallel):
+        return model
+
+    if not isinstance(diffusion_model, nn.Module):
+        return model
+
+    model.diffusion_model = nn.DataParallel(diffusion_model, device_ids=MULTI_GPU_DEVICE_IDS)
+    return model
 
 def get_free_memory(dev=None, torch_free_too=False):
     global directml_enabled

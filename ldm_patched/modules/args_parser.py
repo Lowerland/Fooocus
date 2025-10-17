@@ -45,7 +45,13 @@ parser.add_argument("--temp-path", type=str, default=None)
 parser.add_argument("--cache-path", type=str, default=None)
 parser.add_argument("--in-browser", action="store_true")
 parser.add_argument("--disable-in-browser", action="store_true")
-parser.add_argument("--gpu-device-id", type=int, default=None, metavar="DEVICE_ID")
+parser.add_argument(
+    "--gpu-device-id",
+    type=str,
+    default=None,
+    metavar="DEVICE_ID",
+    help="Select a specific CUDA device or a comma-separated list of devices for multi-GPU execution.",
+)
 cm_group = parser.add_mutually_exclusive_group()
 cm_group.add_argument("--async-cuda-allocation", action="store_true")
 cm_group.add_argument("--disable-async-cuda-allocation", action="store_true")
