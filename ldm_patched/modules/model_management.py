@@ -278,6 +278,28 @@ print("VAE dtype:", VAE_DTYPE)
 
 current_loaded_models = []
 
+class DiffusionDataParallel(nn.DataParallel):
+    """DataParallel wrapper that preserves single-GPU state_dict semantics."""
+
+    def state_dict(self, *args, **kwargs):
+        return self.module.state_dict(*args, **kwargs)
+
+    def load_state_dict(self, state_dict, strict=True):
+        return self.module.load_state_dict(state_dict, strict=strict)
+
+    def named_parameters(self, *args, **kwargs):
+        return self.module.named_parameters(*args, **kwargs)
+
+    def parameters(self, *args, **kwargs):
+        return self.module.parameters(*args, **kwargs)
+
+    def named_buffers(self, *args, **kwargs):
+        return self.module.named_buffers(*args, **kwargs)
+
+    def buffers(self, *args, **kwargs):
+        return self.module.buffers(*args, **kwargs)
+
+
 def module_size(module):
     module_mem = 0
     sd = module.state_dict()
@@ -689,7 +711,7 @@ def prepare_model_for_multi_gpu(model):
     if not isinstance(diffusion_model, nn.Module):
         return model
 
-    model.diffusion_model = nn.DataParallel(diffusion_model, device_ids=MULTI_GPU_DEVICE_IDS)
+    model.diffusion_model = DiffusionDataParallel(diffusion_model, device_ids=MULTI_GPU_DEVICE_IDS)
     return model
 
 def get_free_memory(dev=None, torch_free_too=False):
