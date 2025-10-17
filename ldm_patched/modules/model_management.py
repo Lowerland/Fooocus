@@ -717,6 +717,33 @@ def _expose_dataparallel_module_apis(parallel_module: nn.DataParallel):
             setattr(parallel_module, attr, getattr(parallel_module.module, attr))
 
 
+_CONTROL_LORA_MULTI_GPU_WARNING = False
+
+
+def disable_control_lora_multi_gpu(model):
+    """Unwrap DataParallel models when Control LoRAs are active.
+
+    Control LoRA checkpoints are applied by constructing an internal ControlNet
+    that copies the base UNet weights.  Torch's DataParallel wrapper replicates
+    the module across devices which breaks some of the shape assumptions the
+    Control LoRA loader relies on, leading to runtime matmul shape errors when
+    the patched layers are invoked.  To keep the experience stable we fall back
+    to the primary device whenever a Control LoRA is enabled.
+    """
+
+    global _CONTROL_LORA_MULTI_GPU_WARNING
+
+    diffusion_model = getattr(model, "diffusion_model", None)
+    if not isinstance(diffusion_model, nn.DataParallel):
+        return
+
+    model.diffusion_model = diffusion_model.module
+
+    if not _CONTROL_LORA_MULTI_GPU_WARNING:
+        print("Multi-GPU execution is disabled while Control LoRAs are active.")
+        _CONTROL_LORA_MULTI_GPU_WARNING = True
+
+
 def prepare_model_for_multi_gpu(model):
     if not multi_gpu_available():
         return model
