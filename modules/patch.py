@@ -379,6 +379,13 @@ def patched_unet_forward(self, x, timesteps=None, context=None, y=None, control=
 
     y = timed_adm(y, timesteps)
 
+    if self.num_classes is None:
+        # Some schedulers may provide a placeholder class label even when the
+        # underlying UNet is not class-conditional. In those cases we simply
+        # ignore the provided value to keep backwards compatibility with
+        # unconditional checkpoints.
+        y = None
+
     transformer_options["original_shape"] = list(x.shape)
     transformer_options["transformer_index"] = 0
     transformer_patches = transformer_options.get("patches", {})
