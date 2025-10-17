@@ -1,3 +1,5 @@
+import os
+
 import torch
 import ldm_patched.modules.clip_vision
 import safetensors.torch as sf
@@ -8,6 +10,7 @@ from extras.resampler import Resampler
 from ldm_patched.modules.model_patcher import ModelPatcher
 from modules.core import numpy_to_pytorch
 from modules.ops import use_patched_ops
+from modules.patch import patch_settings
 from ldm_patched.modules.ops import manual_cast
 
 
