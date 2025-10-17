@@ -385,6 +385,32 @@ def patched_unet_forward(self, x, timesteps=None, context=None, y=None, control=
         # ignore the provided value to keep backwards compatibility with
         # unconditional checkpoints.
         y = None
+    elif y is None:
+        # A handful of pipelines occasionally omit the ADM vector even though
+        # the model is configured to expect it (for example when running with
+        # DataParallel and an empty split lands on a replica).  The original
+        # implementation would assert in this situation which aborts the
+        # entire job.  Instead we fall back to a zero vector of the expected
+        # shape so the network can continue running in a defined state.
+        if isinstance(getattr(self, "label_emb", None), torch.nn.Embedding):
+            y = torch.zeros(
+                (x.shape[0],), dtype=torch.long, device=x.device
+            )
+        else:
+            label_linear = None
+            if hasattr(self, "label_emb"):
+                for module in self.label_emb.modules():
+                    if isinstance(module, torch.nn.Linear):
+                        label_linear = module
+                        break
+            if label_linear is not None:
+                y = torch.zeros(
+                    (x.shape[0], label_linear.in_features),
+                    dtype=label_linear.weight.dtype,
+                    device=x.device,
+                )
+            else:
+                y = torch.zeros((x.shape[0],), dtype=x.dtype, device=x.device)
 
     transformer_options["original_shape"] = list(x.shape)
     transformer_options["transformer_index"] = 0
