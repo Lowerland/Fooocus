@@ -1,3 +1,5 @@
+import os
+
 import torch
 import ldm_patched.modules.clip_vision
 import safetensors.torch as sf
@@ -8,6 +10,7 @@ from extras.resampler import Resampler
 from ldm_patched.modules.model_patcher import ModelPatcher
 from modules.core import numpy_to_pytorch
 from modules.ops import use_patched_ops
+from modules.patch import patch_settings
 from ldm_patched.modules.ops import manual_cast
 
 
@@ -207,7 +210,13 @@ def patch_model(model, tasks):
     def make_attn_patcher(ip_index):
         def patcher(n, context_attn2, value_attn2, extra_options):
             org_dtype = n.dtype
-            current_step = float(model.model.diffusion_model.current_step.detach().cpu().numpy()[0])
+
+            state = patch_settings.get(os.getpid())
+            if state is not None:
+                current_step = float(getattr(state, "global_diffusion_progress", 0.0))
+            else:
+                current_step = 0.0
+
             cond_or_uncond = extra_options['cond_or_uncond']
 
             q = n
