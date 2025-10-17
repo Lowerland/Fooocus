@@ -675,6 +675,26 @@ def multi_gpu_device_ids():
     return MULTI_GPU_DEVICE_IDS[:]
 
 
+def _expose_dataparallel_module_apis(parallel_module: nn.DataParallel):
+    """Expose wrapped module helpers directly on the DataParallel instance."""
+
+    if parallel_module is None:
+        return
+
+    exposed_attrs = (
+        "state_dict",
+        "load_state_dict",
+        "named_parameters",
+        "parameters",
+        "named_buffers",
+        "buffers",
+    )
+
+    for attr in exposed_attrs:
+        if hasattr(parallel_module.module, attr):
+            setattr(parallel_module, attr, getattr(parallel_module.module, attr))
+
+
 def prepare_model_for_multi_gpu(model):
     if not multi_gpu_available():
         return model
@@ -684,12 +704,15 @@ def prepare_model_for_multi_gpu(model):
         return model
 
     if isinstance(diffusion_model, nn.DataParallel):
+        _expose_dataparallel_module_apis(diffusion_model)
         return model
 
     if not isinstance(diffusion_model, nn.Module):
         return model
 
-    model.diffusion_model = nn.DataParallel(diffusion_model, device_ids=MULTI_GPU_DEVICE_IDS)
+    wrapped = nn.DataParallel(diffusion_model, device_ids=MULTI_GPU_DEVICE_IDS)
+    _expose_dataparallel_module_apis(wrapped)
+    model.diffusion_model = wrapped
     return model
 
 def get_free_memory(dev=None, torch_free_too=False):
