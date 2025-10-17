@@ -86,7 +86,22 @@ class BaseModel(torch.nn.Module):
         return self.model_sampling.calculate_denoised(sigma, model_output, x)
 
     def get_dtype(self):
-        return self.diffusion_model.dtype
+        diffusion_model = getattr(self, "diffusion_model", None)
+        if diffusion_model is None:
+            return torch.float32
+
+        if isinstance(diffusion_model, torch.nn.DataParallel):
+            diffusion_model = diffusion_model.module
+
+        dtype = getattr(diffusion_model, "dtype", None)
+        if dtype is not None:
+            return dtype
+
+        parameter = next(diffusion_model.parameters(), None)
+        if parameter is not None:
+            return parameter.dtype
+
+        return torch.float32
 
     def is_adm(self):
         return self.adm_channels > 0
