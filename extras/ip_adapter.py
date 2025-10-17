@@ -211,9 +211,17 @@ def patch_model(model, tasks):
         def patcher(n, context_attn2, value_attn2, extra_options):
             org_dtype = n.dtype
 
-            state = patch_settings.get(os.getpid())
-            if state is not None:
-                current_step = float(getattr(state, "global_diffusion_progress", 0.0))
+            diffusion_model = model.model.diffusion_model
+
+            current_step_tensor = getattr(diffusion_model, "current_step", None)
+
+            if current_step_tensor is None and isinstance(diffusion_model, torch.nn.DataParallel):
+                current_step_tensor = getattr(diffusion_model.module, "current_step", None)
+
+            if isinstance(current_step_tensor, torch.Tensor):
+                current_step = float(current_step_tensor.detach().cpu().reshape(-1)[0])
+            elif current_step_tensor is not None:
+                current_step = float(current_step_tensor)
             else:
                 current_step = 0.0
 
